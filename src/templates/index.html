@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ConcertHub - Лабораторная работа №4</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+    <!-- Шапка приложения -->
+    <header>
+        <div class="logo-area">
+            <span class="logo-badge">ConcertHub</span>
+            <div>
+                <h1 style="font-size: 1.15rem; font-weight: 600;">Информационная система продажи билетов</h1>
+                <p class="subtitle">Лабораторная работа №4: Многопользовательский доступ и уровень приложения</p>
+            </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
+            <!-- Быстрый выбор роли -->
+            <div class="quick-switch">
+                <span style="font-size: 0.8rem; color: var(--text-secondary); align-self: center; margin-right: 0.25rem;">Роль:</span>
+                <button class="btn-switch" data-role="customer" title="Роль зрителя: только афиша и свои билеты">👤 ivan_customer</button>
+                <button class="btn-switch" data-role="staff" title="Роль персонала: управление концертами и билетами">🏢 petrov_staff</button>
+                <button class="btn-switch active" data-role="admin" title="Роль администратора: полный доступ">🛡️ admin_user</button>
+                <button class="btn-switch" data-role="postgres" title="Суперпользователь СУБД">⚙️ postgres</button>
+            </div>
+
+            <!-- Текущий статус пользователя -->
+            <div class="user-status">
+                <span id="current-user-display" style="font-weight: 600; font-size: 0.85rem;">{{ current_user }}</span>
+                <span id="current-role-badge" class="role-badge role-{{ current_role }}">{{ role_info.title }}</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Всплывающее уведомление -->
+    <div id="global-notification" class="alert alert-info" style="display: none; position: fixed; top: 1rem; right: 2rem; z-index: 2000; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5);"></div>
+
+    <!-- Навигация по вкладкам -->
+    <nav class="tabs-nav">
+        <button class="tab-btn active" data-target="tab-tables">📑 Таблицы и данные</button>
+        <button class="tab-btn" data-target="tab-analytics">📊 Сложные запросы (GROUP BY)</button>
+        <button class="tab-btn" data-target="tab-audit">🔒 Аудит и безопасность</button>
+    </nav>
+
+    <!-- Основное содержимое -->
+    <main class="main-content">
+
+        <!-- Вкладка 1: Таблицы и представления (п. 1-3 задания) -->
+        <section id="tab-tables" class="tab-pane active">
+            <div class="tables-layout">
+                <!-- Боковая панель со списком доступных таблиц для роли -->
+                <aside class="sidebar">
+                    <h3>Доступные сущности</h3>
+                    <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 0.75rem;">
+                        Список формируется динамически на основе роли пользователя в PostgreSQL.
+                    </p>
+                    <ul id="tables-menu" class="table-list">
+                        <!-- Заполняется динамически JS -->
+                    </ul>
+                </aside>
+
+                <!-- Область отображения и редактирования данных -->
+                <div class="view-card">
+                    <div class="table-header-bar">
+                        <div>
+                            <h2 id="current-table-title" style="font-size: 1.25rem;">Таблица</h2>
+                            <p style="font-size: 0.8rem; color: var(--text-secondary);">Отображение данных через сессию SQLAlchemy ORM</p>
+                        </div>
+                        <div class="table-actions">
+                            <button id="btn-add-record" class="btn-primary" style="display: none;">+ Добавить запись</button>
+                        </div>
+                    </div>
+
+                    <!-- Блок отображения отказа в доступе (п. 2 и 3 ТЗ) -->
+                    <div id="table-error-alert" class="alert alert-danger" style="display: none;"></div>
+
+                    <!-- Таблица данных -->
+                    <div id="table-container">
+                        <!-- Рендерится JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Вкладка 2: Сложные SQL-запросы с GROUP BY (п. 4 задания) -->
+        <section id="tab-analytics" class="tab-pane">
+            <div class="view-card" style="margin-bottom: 2rem;">
+                <h2 style="margin-bottom: 0.5rem;">Сложные аналитические запросы с GROUP BY</h2>
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1.5rem;">
+                    Согласно заданию п. 4, для каждой группы пользователей реализован запрос, объединяющий более 2 сущностей,
+                    с агрегацией данных функцией GROUP BY, а также с возможностью интерактивной сортировки и фильтрации.
+                </p>
+
+                <!-- Запрос 1: Для роли Зрителя (Customer) -->
+                <div style="background-color: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 style="font-size: 1rem; color: var(--info);">
+                            👤 Запрос для роли Зрителя: Сводка афиши и доступности билетов
+                        </h3>
+                        <span class="badge-tag">Concert + Artist + Venue + Ticket (4 сущности)</span>
+                    </div>
+
+                    <div class="sql-box">SELECT c.concert_id, c.program_name, c.start_datetime, a.stage_name, a.music_genre, v.venue_name, v.city,
+       COUNT(t.ticket_id) AS available_tickets, MIN(t.price) AS min_price, MAX(t.price) AS max_price, ROUND(AVG(t.price), 2) AS avg_price
+FROM concert c
+JOIN artist a ON c.artist_id = a.artist_id
+JOIN venue v ON c.venue_id = v.venue_id
+LEFT JOIN ticket t ON c.concert_id = t.concert_id AND t.ticket_status = 'Доступен'
+GROUP BY c.concert_id, c.program_name, c.start_datetime, c.age_restriction, a.stage_name, a.music_genre, v.venue_name, v.city
+ORDER BY start_datetime ASC;</div>
+
+                    <form id="form-analytics-customer" class="filters-bar">
+                        <div class="filter-group">
+                            <label>Фильтр по городу:</label>
+                            <input type="text" id="customer-filter-city" placeholder="Например, Москва">
+                        </div>
+                        <div class="filter-group">
+                            <label>Фильтр по жанру:</label>
+                            <input type="text" id="customer-filter-genre" placeholder="Например, Pop">
+                        </div>
+                        <div class="filter-group">
+                            <label>Сортировать по:</label>
+                            <select id="customer-sort-by">
+                                <option value="start_datetime">Дате начала концерта</option>
+                                <option value="min_price">Минимальной цене</option>
+                                <option value="available_tickets">Числу доступных билетов</option>
+                                <option value="artist">Имени артиста</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Направление:</label>
+                            <select id="customer-sort-dir">
+                                <option value="asc">По возрастанию (ASC)</option>
+                                <option value="desc">По убыванию (DESC)</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn-primary">Применить фильтр</button>
+                    </form>
+
+                    <div id="customer-analytics-results"></div>
+                </div>
+
+                <!-- Запрос 2: Для роли Персонала / Организатора (Staff) -->
+                <div style="background-color: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem; margin-bottom: 2rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 style="font-size: 1rem; color: var(--warning);">
+                            🏢 Запрос для роли Персонала: Мониторинг сборов и заполняемости площадок
+                        </h3>
+                        <span class="badge-tag">Concert + Promoter + Artist + Venue + Ticket (5 сущностей)</span>
+                    </div>
+
+                    <div class="sql-box">SELECT p.company_name, c.concert_id, c.program_name, a.stage_name, v.venue_name, v.total_capacity,
+       COUNT(CASE WHEN t.ticket_status = 'Продан' THEN 1 END) AS tickets_sold,
+       ROUND((COUNT(CASE WHEN t.ticket_status = 'Продан' THEN 1 END)::numeric / NULLIF(v.total_capacity, 0)) * 100, 2) AS occupancy_percent,
+       COALESCE(SUM(CASE WHEN t.ticket_status = 'Продан' THEN t.price ELSE 0 END), 0) AS total_revenue,
+       ROUND(AVG(CASE WHEN t.ticket_status = 'Продан' THEN t.price ELSE NULL END), 2) AS avg_sold_price
+FROM concert c
+JOIN promoter p ON c.promoter_id = p.promoter_id
+JOIN artist a ON c.artist_id = a.artist_id
+JOIN venue v ON c.venue_id = v.venue_id
+LEFT JOIN ticket t ON c.concert_id = t.concert_id
+GROUP BY p.company_name, c.concert_id, c.program_name, c.start_datetime, a.stage_name, v.venue_name, v.total_capacity
+ORDER BY total_revenue DESC;</div>
+
+                    <form id="form-analytics-staff" class="filters-bar">
+                        <div class="filter-group">
+                            <label>Фильтр по промоутеру:</label>
+                            <input type="text" id="staff-filter-promoter" placeholder="Например, Северный звук">
+                        </div>
+                        <div class="filter-group">
+                            <label>Мин. выручка (₽):</label>
+                            <input type="number" id="staff-filter-min-revenue" placeholder="0">
+                        </div>
+                        <div class="filter-group">
+                            <label>Сортировка:</label>
+                            <select id="staff-sort-by">
+                                <option value="total_revenue">По суммарной выручке</option>
+                                <option value="tickets_sold">По проданным билетам</option>
+                                <option value="occupancy_percent">По заполняемости (%)</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Направление:</label>
+                            <select id="staff-sort-dir">
+                                <option value="desc">По убыванию (DESC)</option>
+                                <option value="asc">По возрастанию (ASC)</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn-primary">Применить фильтр</button>
+                    </form>
+
+                    <div id="staff-analytics-results"></div>
+                </div>
+
+                <!-- Запрос 3: Для роли Администратора (Admin) -->
+                <div style="background-color: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.25rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h3 style="font-size: 1rem; color: var(--danger);">
+                            🛡️ Запрос для роли Администратора: Коммерческая статистика артистов и география туров
+                        </h3>
+                        <span class="badge-tag">Artist + Concert + Venue + Ticket (4 сущности)</span>
+                    </div>
+
+                    <div class="sql-box">SELECT a.artist_id, a.stage_name, a.music_genre,
+       COUNT(DISTINCT c.concert_id) AS total_concerts,
+       COUNT(DISTINCT v.city) AS cities_visited,
+       COUNT(CASE WHEN t.ticket_status = 'Продан' THEN 1 END) AS total_tickets_sold,
+       COALESCE(SUM(CASE WHEN t.ticket_status = 'Продан' THEN t.price ELSE 0 END), 0) AS total_gross,
+       ROUND(COALESCE(SUM(CASE WHEN t.ticket_status = 'Продан' THEN t.price ELSE 0 END), 0) / NULLIF(COUNT(DISTINCT c.concert_id), 0), 2) AS avg_revenue_per_concert
+FROM artist a
+LEFT JOIN concert c ON a.artist_id = c.artist_id
+LEFT JOIN venue v ON c.venue_id = v.venue_id
+LEFT JOIN ticket t ON c.concert_id = t.concert_id
+GROUP BY a.artist_id, a.stage_name, a.music_genre
+ORDER BY total_gross DESC;</div>
+
+                    <form id="form-analytics-admin" class="filters-bar">
+                        <div class="filter-group">
+                            <label>Фильтр по жанру:</label>
+                            <input type="text" id="admin-filter-genre" placeholder="Например, Pop, Rock">
+                        </div>
+                        <div class="filter-group">
+                            <label>Мин. проданных билетов:</label>
+                            <input type="number" id="admin-filter-tickets" placeholder="0">
+                        </div>
+                        <div class="filter-group">
+                            <label>Сортировать по:</label>
+                            <select id="admin-sort-by">
+                                <option value="total_gross">Валовой выручке</option>
+                                <option value="total_concerts">Числу концертов</option>
+                                <option value="total_tickets_sold">Проданным билетам</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label>Направление:</label>
+                            <select id="admin-sort-dir">
+                                <option value="desc">По убыванию (DESC)</option>
+                                <option value="asc">По возрастанию (ASC)</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn-primary">Применить фильтр</button>
+                    </form>
+
+                    <div id="admin-analytics-results"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Вкладка 3: Безопасность и аудит (ЛР №3) -->
+        <section id="tab-audit" class="tab-pane">
+            <div class="view-card" style="margin-bottom: 2rem;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <div>
+                        <h2>Журнал аудита операций (audit.main_log)</h2>
+                        <p style="color: var(--text-secondary); font-size: 0.85rem;">
+                            Автоматическая фиксация изменений триггерной функцией public.logging() при операциях INSERT, UPDATE, DELETE.
+                        </p>
+                    </div>
+                    <button class="btn-primary" onclick="loadAuditLogs()">Обновить журнал</button>
+                </div>
+                <div id="audit-logs-container">
+                    <!-- Заполняется JS -->
+                </div>
+            </div>
+
+            <!-- Демонстрация расшифровки данных pgcrypto -->
+            <div class="view-card">
+                <h2>Конфиденциальные данные и шифрование (audit.secret_data)</h2>
+                <p style="color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 1rem;">
+                    Хранение симметрично зашифрованных токенов (AES-256) ключом хэша SHA-256('NazmievSushkoMavliaviev').
+                </p>
+                <div style="display: flex; gap: 1rem;">
+                    <button class="btn-primary" onclick="decryptToken(1)">Расшифровать токен 1 (admin_user)</button>
+                    <button class="btn-primary" onclick="decryptToken(2)">Расшифровать токен 2 (petrov_staff)</button>
+                </div>
+                <div id="decrypt-result-box"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Модальное окно добавления записи -->
+    <div id="add-modal" class="modal-overlay">
+        <div class="modal-card">
+            <h3 id="modal-title">Добавить запись</h3>
+            <form id="form-add-record">
+                <div id="modal-fields"></div>
+                <div class="modal-buttons">
+                    <button type="button" id="btn-close-modal" class="btn-secondary">Отмена</button>
+                    <button type="submit" class="btn-primary">Сохранить в БД</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

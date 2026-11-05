@@ -1,0 +1,40 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: concerthub_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: concerthub
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d concerthub"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build: .
+    container_name: concerthub_web
+    restart: always
+    environment:
+      APP_HOST: 0.0.0.0
+      APP_PORT: 5000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: concerthub
+      DB_ADMIN_USER: postgres
+      DB_ADMIN_PASSWORD: postgres
+      DEBUG: "True"
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

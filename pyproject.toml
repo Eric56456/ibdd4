@@ -1,0 +1,21 @@
+[project]
+name = "concerthub"
+version = "0.4.0"
+description = "Информационная система продажи билетов ConcertHub - Лабораторная работа №4"
+authors = [
+    {name = "Назмиев Марат", email = "marat@example.com"},
+    {name = "Сушко Руслан", email = "ruslan@example.com"},
+    {name = "Мавлявиев Эрик", email = "eric@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "flask>=3.0.0",
+    "sqlalchemy>=2.0.0",
+    "psycopg2-binary>=2.9.9",
+    "pydantic>=2.0.0"
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
